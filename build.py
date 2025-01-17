@@ -124,6 +124,8 @@ def monitor_build_progress(log_file, message_id, rom, version, device_name):
                         )
                         edit_telegram_message(message_id, new_text)
                         previous_progress = progress
+                if "ota_from_target_files.py - INFO    : done" in line:
+                    break
     except Exception as e:
         print(f"Erro ao monitorar progresso: {e}")
 

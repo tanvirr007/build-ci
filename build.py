@@ -3,6 +3,7 @@ import subprocess
 import requests
 import re
 import time
+import psutil
 
 # Configurações do Telegram
 CHAT_ID = "SEU_CHAT_ID"
@@ -70,6 +71,21 @@ def get_lunch_info():
         print(f"Erro ao obter informações do lunch: {e}")
         return "Desconhecido", "Desconhecido", "Desconhecido"
 
+def monitor_system_resources():
+    try:
+        cpu_usage = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage("/")
+        return {
+            "cpu": f"{cpu_usage}%",
+            "ram": f"{memory.percent}%",
+            "disk": f"{disk.used // (1024 ** 3)}GB/{disk.total // (1024 ** 3)}GB ({disk.percent}%)"
+        }
+    except Exception as e:
+        print(f"Erro ao monitorar recursos do sistema: {e}")
+        return {"cpu": "N/A", "ram": "N/A", "disk": "N/A"}
+
+
 # Função para monitorar progresso do build
 def monitor_build_progress(log_file, message_id, rom, version, device_name):
     progress_pattern = re.compile(r"\[\s*(\d+)%\s+(\d+/\d+)\s+([\d\w]+ remaining)\]")  # Captura progresso detalhado
@@ -88,12 +104,23 @@ def monitor_build_progress(log_file, message_id, rom, version, device_name):
                     time_remaining = match.group(3)  # Exemplo: "5m49s remaining"
                     progress = f"{percentage} {tasks} {time_remaining}"
                     if progress != previous_progress:
+                        # Monitorar recursos do sistema
+                        resources = monitor_system_resources()
+                        cpu = resources["cpu"]
+                        ram = resources["ram"]
+                        disk = resources["disk"]
+
+                        # Atualizar mensagem no Telegram
                         new_text = (
                             f"🔄 <b>Compilando...</b>\n"
                             f"<b>ROM:</b> {rom}\n"
                             f"<b>Android:</b> {version}\n"
                             f"<b>Dispositivo:</b> {device_name}\n"
-                            f"<b>Progresso:</b> {progress}"
+                            f"<b>Progresso:</b> {progress}\n"
+                            f"<b>Recursos do Sistema:</b>\n"
+                            f"• CPU: {cpu}\n"
+                            f"• RAM: {ram}\n"
+                            f"• Disco: {disk}"
                         )
                         edit_telegram_message(message_id, new_text)
                         previous_progress = progress

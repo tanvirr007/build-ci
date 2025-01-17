@@ -72,7 +72,7 @@ def get_lunch_info():
 
 # Função para monitorar progresso do build
 def monitor_build_progress(log_file, message_id, rom, version, device_name):
-    progress_pattern = re.compile(r"\[\s*(\d+)%\s")  # Captura o padrão [ XX% ]
+    progress_pattern = re.compile(r"\[\s*(\d+)%\s+(\d+/\d+)\s+([\d\w]+ remaining)\]")  # Captura progresso detalhado
     previous_progress = None
     try:
         with open(log_file, "r") as log:
@@ -83,7 +83,10 @@ def monitor_build_progress(log_file, message_id, rom, version, device_name):
                     continue
                 match = progress_pattern.search(line)
                 if match:
-                    progress = match.group(1) + "%"  # Exemplo: "85%"
+                    percentage = match.group(1) + "%"  # Exemplo: "88%"
+                    tasks = match.group(2)  # Exemplo: "104/118"
+                    time_remaining = match.group(3)  # Exemplo: "5m49s remaining"
+                    progress = f"{percentage} {tasks} {time_remaining}"
                     if progress != previous_progress:
                         new_text = (
                             f"🔄 <b>Compilando...</b>\n"

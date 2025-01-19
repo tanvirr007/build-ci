@@ -281,7 +281,7 @@ def main():
             upload_build(device_name, rom, log_file)
         else:
             edit_telegram_message(message_id, "🔴 <b>Compilação falhou!</b>")
-            send_telegram_file(log_file, "🔴 <b>Log de erro:</b>")
+            send_telegram_file(log_file, "🔴 <b>Log de erro:</b>", parse_mode="HTML")
 
         # Aguarde o término da thread de monitoramento (opcional)
         monitor_thread.join()
@@ -291,7 +291,7 @@ def main():
     finally:
         # Verifique se log_file foi definido e existe antes de usá-lo
         if log_file and os.path.exists(log_file):
-            send_telegram_file(log_file, "📄 <b>Log final:</b>")
+            send_telegram_file(log_file, "📄 <b>Log final:</b>", parse_mode="HTML")
             os.remove(log_file)
 
 if __name__ == "__main__":

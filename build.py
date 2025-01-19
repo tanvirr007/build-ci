@@ -4,6 +4,7 @@ import requests
 import re
 import time
 import psutil
+import json
 
 # Configurações do Telegram
 CHAT_ID = "SEU_CHAT_ID"
@@ -13,6 +14,9 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 # Configurações de build
 LUNCH_TARGET = "aosp_spes-user"
 BUILD_TARGET = "bacon"
+
+# Configurações do Pixeldrain
+API_KEY = "12345678910"
 
 # Funções para envio de mensagens ao Telegram
 def send_telegram_message(message):
@@ -129,6 +133,93 @@ def monitor_build_progress(log_file, message_id, rom, version, device_name):
     except Exception as e:
         print(f"Erro ao monitorar progresso: {e}")
 
+def upload_file_to_pixeldrain(rom_path, API_KEY):
+    url = "https://pixeldrain.com/api/file/"
+
+    try:
+        result = subprocess.run(
+            ["curl", "-T", rom_path, "-u", f":{API_KEY}", "--retry", "3", url],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            print(f"Erro ao fazer upload para o Pixeldrain: {result.stderr}")
+            return None
+        
+        response_data = json.loads(result.stdout)
+        print(f"Resposta da API do Pixeldrain: {response_data}")  # Adicionar este print para depuração
+        file_id = response_data.get("id")
+
+        if file_id:
+            return f"https://pixeldrain.com/u/{file_id}"
+        else:
+            print("Erro: Não foi possível obter o ID do arquivo do Pixeldrain.")
+            return None
+
+    except FileNotFoundError:
+        print(f"Erro: O arquivo '{rom_path}' não foi encontrado.")
+        return None
+    except Exception as e:
+        print(f"Erro ao fazer upload para o Pixeldrain: {e}")
+        return None
+
+def upload_build(device_name, rom, log_file):
+    # Obter path do arquivo
+    rom_path = None
+    with open(log_file, "r") as log:
+      line = next((line for line in log if re.search(rf"Package Complete: (out/target/product/{device_name}/[\w\-\.]+\.zip)", line)), None)
+      if line:
+           rom_path = re.search(rf"Package Complete: (out/target/product/{device_name}/[\w\-\.]+\.zip)", line).group(1)
+
+    # Guardar tamanho do arquivo em MB
+    file_size_mb = round(os.path.getsize(rom_path) / (1024 ** 2), 2)
+
+    # Informar início do upload
+    upload_message_id = send_telegram_message(
+        f"🟡 <b>Iniciando upload...!</b>\n"
+        f"<b>ROM:</b> {rom}\n"
+        f"<b>Tamanho do arquivo:</b> {file_size_mb} MB\n"
+        f"<b>Dispositivo:</b> {device_name}",
+    )
+
+    # Verificar se o arquivo ROM existe
+    if not os.path.exists(rom_path):
+        print(f"Erro: O arquivo ROM '{rom_path}' não foi encontrado.")
+        edit_telegram_message(
+            upload_message_id,
+            f"🔴 <b>Falha no upload: arquivo ROM não encontrado!</b>\n"
+            f"<b>ROM:</b> {rom}\n"
+            f"<b>Tamanho do arquivo:</b> {file_size_mb} MB\n"
+            f"<b>Dispositivo:</b> {device_name}",
+        )
+        return False
+
+    # Fazer upload do arquivo ROM para o Pixeldrain
+    file_url = upload_file_to_pixeldrain(rom_path, API_KEY)
+
+    # Verificar se o upload foi bem-sucedido
+    if file_url:
+        edit_telegram_message(
+            upload_message_id,
+            f"🟢 <b>Upload concluído com sucesso!</b>\n"
+            f"<b>ROM:</b> {rom}\n"
+            f"<b>Tamanho do arquivo:</b> {file_size_mb} MB\n"
+            f"<b>Dispositivo:</b> {device_name}\n"
+            f"☁️ <a href='{file_url}'>Download</a>",
+        )
+        return True
+    else:
+        print("Erro: Falha ao fazer upload do arquivo.")
+        edit_telegram_message(
+            upload_message_id,
+            f"🔴 <b>Falha no upload: falha ao fazer upload do arquivo!</b>\n"
+            f"<b>ROM:</b> {rom}\n"
+            f"<b>Tamanho do arquivo:</b> {file_size_mb} MB\n"
+            f"<b>Dispositivo:</b> {device_name}",
+        )
+        return False
+
 # Função principal
 def main():
     log_file = "build.log"
@@ -177,6 +268,8 @@ def main():
                 f"<b>Android:</b> {version}\n"
                 f"<b>Dispositivo:</b> {device_name}",
             )
+            time.sleep(5) # Aguardar 5 segundos antes de fazer upload
+            upload_build(device_name, rom, log_file)
         else:
             edit_telegram_message(message_id, "🔴 <b>Compilação falhou!</b>")
             send_telegram_file(log_file, "🔴 <b>Log de erro:</b>")
